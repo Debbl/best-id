@@ -1,6 +1,6 @@
 # best-id
 
-Minimal typed IDs inspired by `typeid-js`, backed by UUIDv7 and encoded as fixed-width Base62.
+Minimal typed IDs inspired by [typeid-js](https://github.com/jetify-com/typeid-js), backed by UUIDv7 and encoded as fixed-width Base62.
 
 ## Features
 
@@ -24,15 +24,19 @@ import type { BestId } from 'best-id'
 
 const userId = generateBestId('user')
 //    ^? BestId<'user'>
+// => 'user_0T7AqK1dY4ZxN8mJ2pLsQ9'
 
 const anonymousId = generateBestId()
 //    ^? BestId<''>
+// => '0T7AqK1dY4ZxN8mJ2pLsQ9'
 
 const parsedUserId = parseBestId(userId, 'user')
 //    ^? ParsedBestId<'user'> & { prefix: 'user' }
+// => { value: 'user_0T7AqK1dY4ZxN8mJ2pLsQ9', prefix: 'user', suffix: '0T7AqK1dY4ZxN8mJ2pLsQ9' }
 
 const parsedAnonymousId = parseBestId(anonymousId)
 //    ^? ParsedBestId<string>
+// => { value: '0T7AqK1dY4ZxN8mJ2pLsQ9', prefix: '', suffix: '0T7AqK1dY4ZxN8mJ2pLsQ9' }
 
 function loadUser(id: BestId<'user'>) {
   return id
