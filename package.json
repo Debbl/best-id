@@ -1,0 +1,55 @@
+{
+  "name": "best-id",
+  "type": "module",
+  "version": "0.0.0",
+  "packageManager": "pnpm@10.33.0",
+  "description": "Minimal typed IDs inspired by `typeid-js`, backed by UUIDv7 and encoded as fixed-width Base62.",
+  "author": "Brendan Dash <me@aiwan.run> (https://aiwan.run)",
+  "license": "MIT",
+  "homepage": "https://github.com/Debbl/best-id#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Debbl/best-id.git"
+  },
+  "bugs": "https://github.com/Debbl/best-id/issues",
+  "keywords": [],
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "dev": "node ./src/index.ts",
+    "build": "tsdown",
+    "test": "vitest",
+    "release": "bumpp",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "prepare": "simple-git-hooks"
+  },
+  "dependencies": {
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@debbl/eslint-config": "^3.16.0",
+    "@types/node": "^25.5.0",
+    "bumpp": "^11.0.1",
+    "eslint": "^9.39.4",
+    "lint-staged": "^16.4.0",
+    "simple-git-hooks": "^2.13.1",
+    "tsdown": "^0.21.7",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.2"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm lint-staged"
+  },
+  "lint-staged": {
+    "*": "eslint --fix"
+  }
+}
