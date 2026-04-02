@@ -1,7 +1,7 @@
 {
   "name": "best-id",
   "type": "module",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "packageManager": "pnpm@10.33.0",
   "description": "Minimal typed IDs inspired by `typeid-js`, backed by UUIDv7 and encoded as fixed-width Base62.",
   "author": "Brendan Dash <me@aiwan.run> (https://aiwan.run)",
