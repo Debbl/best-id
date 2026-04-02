@@ -20,6 +20,7 @@ pnpm add best-id
 
 ```ts
 import {
+  bestIdFromSuffix,
   bestIdFromUuid,
   bestIdToUuid,
   generateBestId,
@@ -58,6 +59,9 @@ const userIdAgain = bestIdFromUuid(userUuid, 'user')
 
 getBestIdPrefix(userIdAgain)
 // => 'user'
+
+const sameUserId = bestIdFromSuffix('0T7AqK1dY4ZxN8mJ2pLsQ9', 'user')
+// => 'user_0T7AqK1dY4ZxN8mJ2pLsQ9'
 ```
 
 ## API
@@ -65,6 +69,7 @@ getBestIdPrefix(userIdAgain)
 The API naming follows the existing `best-id` style instead of mirroring `typeid-js` verbatim:
 
 - `bestIdFromString` instead of `fromString`
+- `bestIdFromSuffix` for the `typeidUnboxed` case where an existing suffix is supplied
 - `splitBestId` instead of `parseTypeId`
 - `getBestIdPrefix` / `getBestIdSuffix` instead of `getType` / `getSuffix`
 - `bestIdToUuid` / `bestIdToUuidBytes`
@@ -99,6 +104,17 @@ Parses and validates a Best ID string. The suffix must be:
 - exactly 22 characters long
 - valid Base62 using `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz`
 - a valid UUIDv7 payload after decoding
+
+### `bestIdFromSuffix`
+
+```ts
+function bestIdFromSuffix<TPrefix extends string = ''>(
+  suffix: string,
+  prefix?: TPrefix,
+): BestId<TPrefix>
+```
+
+Builds a Best ID from a validated Base62 suffix and an optional prefix.
 
 ### `bestIdFromString`
 

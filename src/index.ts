@@ -43,6 +43,16 @@ export function generateBestId<TPrefix extends string = ''>(
   return formatBestId(normalizedPrefix, suffix) as BestId<TPrefix>
 }
 
+export function bestIdFromSuffix<TPrefix extends string = ''>(
+  suffix: string,
+  prefix?: TPrefix,
+): BestId<TPrefix> {
+  const normalizedPrefix = normalizePrefix(prefix ?? '')
+  validateSuffix(suffix)
+
+  return formatBestId(normalizedPrefix, suffix) as BestId<TPrefix>
+}
+
 export function parseBestId(value: string): ParsedBestId<string>
 export function parseBestId<TPrefix extends string>(
   value: string,
@@ -66,8 +76,7 @@ export function parseBestId<TPrefix extends string = string>(
     }
   }
 
-  const uuidBytes = decodeBase62(suffix)
-  assertUuidV7(uuidBytes)
+  validateSuffix(suffix)
 
   return {
     value: value as BestId<TPrefix>,
@@ -260,6 +269,11 @@ function decodeBase62(suffix: string): Uint8Array {
   }
 
   return bigIntToBytes(value)
+}
+
+function validateSuffix(suffix: string): void {
+  const uuidBytes = decodeBase62(suffix)
+  assertUuidV7(uuidBytes)
 }
 
 function assertUuidV7(bytes: Uint8Array): void {

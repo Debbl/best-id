@@ -2,6 +2,7 @@ import { assert, describe, expectTypeOf, it } from 'vitest'
 
 import {
   bestIdFromString,
+  bestIdFromSuffix,
   generateBestId,
   getBestIdPrefix,
   getBestIdSuffix,
@@ -28,6 +29,39 @@ describe('bestIdFromString', () => {
 
   it('narrows the TypeScript type when a prefix is provided', () => {
     const value = bestIdFromString(generateBestId('user'), 'user')
+
+    expectTypeOf(value).toEqualTypeOf<BestId<'user'>>()
+  })
+})
+
+describe('bestIdFromSuffix', () => {
+  it('builds a branded best id from a validated suffix', () => {
+    const generated = generateBestId('user')
+    const suffix = generated.slice('user_'.length)
+
+    assert.equal(bestIdFromSuffix(suffix, 'user'), generated)
+  })
+
+  it('supports prefix-free ids', () => {
+    const generated = generateBestId()
+
+    assert.equal(bestIdFromSuffix(generated), generated)
+  })
+
+  it('rejects invalid suffixes', () => {
+    assert.throws(
+      () => bestIdFromSuffix('short', 'user'),
+      'Best ID suffix must be exactly 22 Base62 characters.',
+    )
+    assert.throws(
+      () => bestIdFromSuffix('0000000000000000000000', 'user'),
+      'Best ID suffix does not encode a valid UUIDv7 value.',
+    )
+  })
+
+  it('narrows the TypeScript type when a prefix is provided', () => {
+    const generated = generateBestId('user')
+    const value = bestIdFromSuffix(generated.slice('user_'.length), 'user')
 
     expectTypeOf(value).toEqualTypeOf<BestId<'user'>>()
   })
