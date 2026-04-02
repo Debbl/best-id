@@ -1,0 +1,60 @@
+{
+  "name": "best-id-playground",
+  "type": "module",
+  "version": "0.0.2",
+  "private": true,
+  "packageManager": "pnpm@10.30.3",
+  "description": "Interactive playground for best-id.",
+  "author": "Brendan Dash <me@aiwan.run> (https://github.com/Debbl/)",
+  "license": "MIT",
+  "homepage": "https://github.com/Debbl/best-id/tree/main/playground",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Debbl/best-id.git"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "build:analyze": "ANALYZE=true next build",
+    "preview": "wrangler pages dev out",
+    "deploy": "wrangler pages deploy out",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "prepare": "simple-git-hooks"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "lucide-react": "^0.563.0",
+    "motion": "12.18.0",
+    "next": "^16.1.6",
+    "next-themes": "^0.4.6",
+    "radix-ui": "^1.4.3",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "twl": "^0.0.0"
+  },
+  "devDependencies": {
+    "@debbl/eslint-config": "^3.15.2",
+    "@next/bundle-analyzer": "^16.1.6",
+    "@tailwindcss/postcss": "^4.1.18",
+    "@types/node": "^25.2.2",
+    "@types/react": "^19.2.13",
+    "@types/react-dom": "^19.2.3",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "eslint": "9.39.4",
+    "lint-staged": "^16.2.7",
+    "postcss": "^8.5.6",
+    "prettier-plugin-tailwindcss": "^0.7.2",
+    "simple-git-hooks": "^2.13.1",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.79.0"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm typecheck && pnpm lint-staged"
+  },
+  "lint-staged": {
+    "*": "eslint --fix"
+  }
+}
