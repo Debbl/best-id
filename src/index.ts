@@ -1,4 +1,8 @@
-import { parse as parseUuid, v7 as uuidv7 } from 'uuid'
+import {
+  parse as parseUuid,
+  stringify as stringifyUuid,
+  v7 as uuidv7,
+} from 'uuid'
 
 const BASE62_ALPHABET =
   '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
@@ -20,10 +24,15 @@ export type BestId<TPrefix extends string = ''> = string & {
   readonly [bestIdBrand]: TPrefix
 }
 
-export interface ParsedBestId<TPrefix extends string = string> {
-  value: BestId<TPrefix>
+export interface BestIdParts<TPrefix extends string = string> {
   prefix: TPrefix | ''
   suffix: string
+}
+
+export interface ParsedBestId<
+  TPrefix extends string = string,
+> extends BestIdParts<TPrefix> {
+  value: BestId<TPrefix>
 }
 
 export function generateBestId<TPrefix extends string = ''>(
@@ -31,10 +40,7 @@ export function generateBestId<TPrefix extends string = ''>(
 ): BestId<TPrefix> {
   const normalizedPrefix = normalizePrefix(prefix ?? '')
   const suffix = encodeBase62(parseUuid(uuidv7()))
-  const value =
-    normalizedPrefix === '' ? suffix : `${normalizedPrefix}_${suffix}`
-
-  return value as BestId<TPrefix>
+  return formatBestId(normalizedPrefix, suffix) as BestId<TPrefix>
 }
 
 export function parseBestId(value: string): ParsedBestId<string>
@@ -46,7 +52,7 @@ export function parseBestId<TPrefix extends string = string>(
   value: string,
   expectedPrefix?: TPrefix,
 ): ParsedBestId<TPrefix> {
-  const { prefix, suffix } = splitBestId(value)
+  const { prefix, suffix } = splitBestIdString(value)
 
   validatePrefix(prefix)
 
@@ -70,7 +76,94 @@ export function parseBestId<TPrefix extends string = string>(
   }
 }
 
-function splitBestId(value: string): { prefix: string; suffix: string } {
+export function bestIdFromString(value: string): BestId<string>
+export function bestIdFromString<TPrefix extends string>(
+  value: string,
+  expectedPrefix: TPrefix,
+): BestId<TPrefix>
+export function bestIdFromString<TPrefix extends string = string>(
+  value: string,
+  expectedPrefix?: TPrefix,
+): BestId<TPrefix> {
+  if (expectedPrefix === undefined) {
+    return parseBestId(value).value as BestId<TPrefix>
+  }
+
+  return parseBestId(value, expectedPrefix).value
+}
+
+export function splitBestId<TPrefix extends string>(
+  value: BestId<TPrefix>,
+): BestIdParts<TPrefix>
+export function splitBestId(value: string): BestIdParts<string>
+export function splitBestId<TPrefix extends string>(
+  value: string,
+  expectedPrefix: TPrefix,
+): BestIdParts<TPrefix> & { prefix: TPrefix }
+export function splitBestId<TPrefix extends string = string>(
+  value: string,
+  expectedPrefix?: TPrefix,
+): BestIdParts<TPrefix> {
+  if (expectedPrefix === undefined) {
+    const parsed = parseBestId(value)
+
+    return {
+      prefix: parsed.prefix as TPrefix | '',
+      suffix: parsed.suffix,
+    }
+  }
+
+  const parsed = parseBestId(value, expectedPrefix)
+
+  return {
+    prefix: parsed.prefix,
+    suffix: parsed.suffix,
+  }
+}
+
+export function getBestIdPrefix<TPrefix extends string>(
+  value: BestId<TPrefix>,
+): TPrefix {
+  return splitBestId(value).prefix as TPrefix
+}
+
+export function getBestIdSuffix<TPrefix extends string>(
+  value: BestId<TPrefix>,
+): string {
+  return splitBestId(value).suffix
+}
+
+export function bestIdToUuidBytes<TPrefix extends string>(
+  value: BestId<TPrefix>,
+): Uint8Array {
+  return decodeBase62(getBestIdSuffix(value))
+}
+
+export function bestIdToUuid<TPrefix extends string>(
+  value: BestId<TPrefix>,
+): string {
+  return stringifyUuid(bestIdToUuidBytes(value))
+}
+
+export function bestIdFromUuidBytes<TPrefix extends string = ''>(
+  bytes: Uint8Array,
+  prefix?: TPrefix,
+): BestId<TPrefix> {
+  const normalizedPrefix = normalizePrefix(prefix ?? '')
+  assertUuidV7(bytes)
+  const suffix = encodeBase62(bytes)
+
+  return formatBestId(normalizedPrefix, suffix) as BestId<TPrefix>
+}
+
+export function bestIdFromUuid<TPrefix extends string = ''>(
+  uuid: string,
+  prefix?: TPrefix,
+): BestId<TPrefix> {
+  return bestIdFromUuidBytes(parseUuid(uuid), prefix)
+}
+
+function splitBestIdString(value: string): BestIdParts<string> {
   if (value.length === 0) {
     throw new Error('Best ID value must not be empty.')
   }
@@ -89,6 +182,10 @@ function splitBestId(value: string): { prefix: string; suffix: string } {
     prefix: value.slice(0, separatorIndex),
     suffix: value.slice(separatorIndex + 1),
   }
+}
+
+function formatBestId(prefix: string, suffix: string): string {
+  return prefix === '' ? suffix : `${prefix}_${suffix}`
 }
 
 function normalizePrefix(prefix: string): string {
