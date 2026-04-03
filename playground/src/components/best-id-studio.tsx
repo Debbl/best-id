@@ -5,6 +5,7 @@ import {
   Braces,
   Copy,
   Fingerprint,
+  Github,
   Hash,
   RefreshCcw,
   ScanSearch,
@@ -28,20 +29,17 @@ import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
 import { Separator } from '~/components/ui/separator'
 import { Textarea } from '~/components/ui/textarea'
-import { bestIdToUuid, generateBestId, parseBestId } from '~/lib/best-id'
+import { bestIdToUuid, parseBestId } from '~/lib/best-id'
+import {
+  clampCount,
+  createBatch,
+  createInitialParseText,
+  DEFAULT_COUNT,
+  DEFAULT_PREFIX,
+  MAX_COUNT,
+} from '~/lib/best-id-studio-data'
 import { cn } from '~/lib/utils'
-import type { BestId } from '~/lib/best-id'
-
-const DEFAULT_PREFIX = 'user'
-const DEFAULT_COUNT = 4
-const MAX_COUNT = 12
-
-interface GeneratedItem {
-  id: BestId<string>
-  prefix: string
-  suffix: string
-  uuid: string
-}
+import type { GeneratedItem } from '~/lib/best-id-studio-data'
 
 interface ParsedSuccess {
   input: string
@@ -61,37 +59,7 @@ interface ParsedFailure {
 
 type ParsedEntry = ParsedFailure | ParsedSuccess
 
-function clampCount(value: number): number {
-  if (!Number.isFinite(value)) {
-    return DEFAULT_COUNT
-  }
-
-  return Math.min(MAX_COUNT, Math.max(1, Math.trunc(value)))
-}
-
-function createGeneratedItem(id: BestId<string>): GeneratedItem {
-  const parsed = parseBestId(id)
-
-  return {
-    id,
-    prefix: parsed.prefix,
-    suffix: parsed.suffix,
-    uuid: bestIdToUuid(parsed.value),
-  }
-}
-
-function createBatch(prefix: string, count: number): GeneratedItem[] {
-  const normalizedPrefix = prefix.trim()
-
-  return Array.from({ length: clampCount(count) }, () => {
-    const nextId =
-      normalizedPrefix === ''
-        ? generateBestId()
-        : generateBestId(normalizedPrefix)
-
-    return createGeneratedItem(nextId)
-  })
-}
+const INSTALL_COMMAND = 'pnpm add best-id'
 
 function parseEntries(input: string, expectedPrefix: string): ParsedEntry[] {
   const normalizedExpectedPrefix = expectedPrefix.trim()
@@ -127,17 +95,20 @@ function parseEntries(input: string, expectedPrefix: string): ParsedEntry[] {
     })
 }
 
-const INITIAL_GENERATED = createBatch(DEFAULT_PREFIX, DEFAULT_COUNT)
-const INITIAL_PARSE_TEXT = INITIAL_GENERATED.map((item) => item.id).join('\n')
+interface BestIdStudioProps {
+  initialGeneratedItems: GeneratedItem[]
+}
 
-export function BestIdStudio() {
+export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
+  const initialParseText = createInitialParseText(initialGeneratedItems)
   const [prefix, setPrefix] = useState(DEFAULT_PREFIX)
   const [count, setCount] = useState(DEFAULT_COUNT)
   const [expectedPrefix, setExpectedPrefix] = useState(DEFAULT_PREFIX)
-  const [generatedItems, setGeneratedItems] =
-    useState<GeneratedItem[]>(INITIAL_GENERATED)
+  const [generatedItems, setGeneratedItems] = useState<GeneratedItem[]>(
+    initialGeneratedItems,
+  )
   const [generatorError, setGeneratorError] = useState<string | null>(null)
-  const [parserInput, setParserInput] = useState(INITIAL_PARSE_TEXT)
+  const [parserInput, setParserInput] = useState(initialParseText)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
 
   const copiedTimerRef = useRef<number | null>(null)
@@ -194,16 +165,16 @@ export function BestIdStudio() {
     setPrefix(DEFAULT_PREFIX)
     setCount(DEFAULT_COUNT)
     setExpectedPrefix(DEFAULT_PREFIX)
-    setGeneratedItems(INITIAL_GENERATED)
-    setParserInput(INITIAL_PARSE_TEXT)
+    setGeneratedItems(initialGeneratedItems)
+    setParserInput(initialParseText)
     setGeneratorError(null)
   }
 
   return (
     <main className='relative isolate overflow-hidden'>
-      <div className='pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(11,133,146,0.16),transparent_36%),radial-gradient(circle_at_80%_12%,rgba(255,166,77,0.18),transparent_24%),linear-gradient(180deg,rgba(255,255,255,0.94),rgba(255,255,255,0.68))] dark:bg-[radial-gradient(circle_at_top_left,rgba(69,214,201,0.12),transparent_32%),radial-gradient(circle_at_80%_12%,rgba(255,194,107,0.16),transparent_22%),linear-gradient(180deg,rgba(6,20,24,0.96),rgba(6,20,24,0.88))]' />
+      <div className='pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(11,133,146,0.16),transparent_36%),radial-gradient(circle_at_80%_12%,rgba(255,166,77,0.18),transparent_24%),linear-gradient(180deg,rgba(255,255,255,0.94),rgba(255,255,255,0.68))] dark:bg-[radial-gradient(circle_at_top_left,rgba(69,214,201,0.12),transparent_32%),radial-gradient(circle_at_80%_12%,rgba(255,194,107,0.16),transparent_22%),linear-gradient(180deg,rgba(6,20,24,0.96),rgba(6,20,24,0.88))]' />
 
-      <div className='mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8'>
+      <div className='relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8'>
         <motion.header
           animate={{ opacity: 1, y: 0 }}
           className='flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between'
@@ -226,14 +197,44 @@ export function BestIdStudio() {
             </div>
 
             <div className='space-y-3'>
-              <h1 className='max-w-3xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl'>
+              <h1 className='max-w-3xl text-4xl font-semibold tracking-tight text-balance text-foreground sm:text-5xl lg:text-6xl'>
                 Generate typed IDs, then tear them back open.
               </h1>
-              <p className='max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg'>
-                This playground turns the current <code>best-id</code> package
-                into a browser studio: make prefix-aware batches, inspect their
-                UUID payloads, and validate arbitrary input one line at a time.
+              <p className='max-w-2xl text-base leading-7 text-foreground/80 sm:text-lg'>
+                This playground turns the current{' '}
+                <code className='font-medium text-foreground'>best-id</code>{' '}
+                package into a browser studio: make prefix-aware batches,
+                inspect their UUID payloads, and validate arbitrary input one
+                line at a time.
               </p>
+              <div className='flex flex-wrap items-center gap-3 pt-1'>
+                <Button asChild className='rounded-full' variant='outline'>
+                  <a
+                    href='https://github.com/Debbl/best-id'
+                    rel='noreferrer'
+                    target='_blank'
+                  >
+                    <Github className='size-4' />
+                    GitHub
+                  </a>
+                </Button>
+                <div className='inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-2 py-2 text-sm text-foreground shadow-xs backdrop-blur-sm'>
+                  <span className='pl-2 text-foreground/60'>Install</span>
+                  <code className='font-mono font-medium text-foreground'>
+                    {INSTALL_COMMAND}
+                  </code>
+                  <Button
+                    className='rounded-full'
+                    onClick={() => copyText('install-command', INSTALL_COMMAND)}
+                    size='sm'
+                    type='button'
+                    variant='ghost'
+                  >
+                    <Copy className='size-4' />
+                    {copiedKey === 'install-command' ? 'Copied' : 'Copy'}
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
 
