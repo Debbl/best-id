@@ -202,13 +202,24 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
               </h1>
               <p className='max-w-2xl text-base leading-7 text-foreground/80 sm:text-lg'>
                 This playground turns the current{' '}
-                <code className='font-medium text-foreground'>best-id</code>{' '}
+                <a
+                  className='rounded-sm font-medium text-foreground underline decoration-border/80 underline-offset-4 transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none'
+                  href='https://github.com/Debbl/best-id'
+                  rel='noreferrer'
+                  target='_blank'
+                >
+                  <code>best-id</code>
+                </a>{' '}
                 package into a browser studio: make prefix-aware batches,
                 inspect their UUID payloads, and validate arbitrary input one
                 line at a time.
               </p>
-              <div className='flex flex-wrap items-center gap-3 pt-1'>
-                <Button asChild className='rounded-full' variant='outline'>
+              <div className='flex flex-wrap items-stretch gap-3 pt-1'>
+                <Button
+                  asChild
+                  className='h-10 rounded-full px-4'
+                  variant='outline'
+                >
                   <a
                     href='https://github.com/Debbl/best-id'
                     rel='noreferrer'
@@ -218,7 +229,7 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
                     GitHub
                   </a>
                 </Button>
-                <div className='inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-2 py-2 text-sm text-foreground shadow-xs backdrop-blur-sm'>
+                <div className='inline-flex h-10 items-center gap-2 rounded-full border border-border/70 bg-background/80 px-2 text-sm text-foreground shadow-xs backdrop-blur-sm'>
                   <span className='pl-2 text-foreground/60'>Install</span>
                   <code className='font-mono font-medium text-foreground'>
                     {INSTALL_COMMAND}
@@ -350,7 +361,12 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
                     </CardDescription>
                   </div>
 
-                  <Button onClick={handleReset} type='button' variant='outline'>
+                  <Button
+                    className='h-11 rounded-2xl px-4'
+                    onClick={handleReset}
+                    type='button'
+                    variant='outline'
+                  >
                     <RefreshCcw className='size-4' />
                     Reset
                   </Button>
@@ -392,7 +408,7 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
                       Generate
                     </Label>
                     <Button
-                      className='w-full'
+                      className='h-11 w-full rounded-2xl'
                       id='generator-action'
                       onClick={handleGenerate}
                       type='button'
