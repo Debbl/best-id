@@ -1,0 +1,7 @@
+{
+  // Cloudflare Pages project for the statically exported Next.js app.
+  // The custom domain best-id.aiwan.run is configured in the Pages dashboard.
+  "name": "best-id-aiwan-run",
+  "compatibility_date": "2026-04-02",
+  "pages_build_output_dir": "./out",
+}

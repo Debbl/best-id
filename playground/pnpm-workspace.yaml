@@ -1,0 +1,6 @@
+onlyBuiltDependencies:
+  - '@swc/core'
+  - '@tailwindcss/oxide'
+  - sharp
+  - simple-git-hooks
+  - unrs-resolver
