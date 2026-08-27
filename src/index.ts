@@ -1,6 +1,7 @@
 import {
   parse as parseUuid,
   stringify as stringifyUuid,
+  v4 as uuidv4,
   v7 as uuidv7,
 } from 'uuid'
 
@@ -10,6 +11,10 @@ const BASE62_BASE = 62n
 const UUID_BYTE_LENGTH = 16
 const UUID_BIT_LENGTH = 128n
 const UUID_MAX_VALUE = 1n << UUID_BIT_LENGTH
+const UUID_VARIANT_MASK = 0xc0
+const UUID_VARIANT_RFC = 0x80
+const UUID_MIN_VERSION = 1
+const UUID_MAX_VERSION = 8
 const SUFFIX_LENGTH = 22
 const PREFIX_MAX_LENGTH = 63
 const PREFIX_PATTERN = /^[a-z_]+$/
@@ -35,22 +40,82 @@ export interface ParsedBestId<
   value: BestId<TPrefix>
 }
 
+/**
+ * Which UUID payload a Best ID instance generates and accepts.
+ *
+ * - `v7` (default): time-sortable UUIDv7 only.
+ * - `v4`: random UUIDv4 only, not time-sortable.
+ * - `any`: accepts any RFC 9562 UUID version (1-8), generates UUIDv7.
+ */
+export type BestIdVersion = 'v7' | 'v4' | 'any'
+
+export interface BestIdOptions {
+  version?: BestIdVersion
+}
+
+export interface BestIdFactory {
+  readonly version: BestIdVersion
+
+  generate: <TPrefix extends string = ''>(prefix?: TPrefix) => BestId<TPrefix>
+
+  parse: {
+    (value: string): ParsedBestId<string>
+    <TPrefix extends string>(
+      value: string,
+      expectedPrefix: TPrefix,
+    ): ParsedBestId<TPrefix> & { prefix: TPrefix }
+  }
+
+  fromString: {
+    (value: string): BestId<string>
+    <TPrefix extends string>(
+      value: string,
+      expectedPrefix: TPrefix,
+    ): BestId<TPrefix>
+  }
+
+  fromSuffix: <TPrefix extends string = ''>(
+    suffix: string,
+    prefix?: TPrefix,
+  ) => BestId<TPrefix>
+
+  split: {
+    <TPrefix extends string>(value: BestId<TPrefix>): BestIdParts<TPrefix>
+    (value: string): BestIdParts<string>
+    <TPrefix extends string>(
+      value: string,
+      expectedPrefix: TPrefix,
+    ): BestIdParts<TPrefix> & { prefix: TPrefix }
+  }
+
+  getPrefix: <TPrefix extends string>(value: BestId<TPrefix>) => TPrefix
+
+  getSuffix: <TPrefix extends string>(value: BestId<TPrefix>) => string
+
+  toUuidBytes: <TPrefix extends string>(value: BestId<TPrefix>) => Uint8Array
+
+  toUuid: <TPrefix extends string>(value: BestId<TPrefix>) => string
+
+  fromUuidBytes: <TPrefix extends string = ''>(
+    bytes: Uint8Array,
+    prefix?: TPrefix,
+  ) => BestId<TPrefix>
+
+  fromUuid: <TPrefix extends string = ''>(
+    uuid: string,
+    prefix?: TPrefix,
+  ) => BestId<TPrefix>
+}
+
+// The default exports are thin `v7` wrappers over the shared implementations.
+// They stay separate top-level functions so bundlers can drop the ones an
+// application never imports, and so `uuidv4` is only reachable through
+// `createBestId`.
+
 export function generateBestId<TPrefix extends string = ''>(
   prefix?: TPrefix,
 ): BestId<TPrefix> {
-  const normalizedPrefix = normalizePrefix(prefix ?? '')
-  const suffix = encodeBase62(parseUuid(uuidv7()))
-  return formatBestId(normalizedPrefix, suffix) as BestId<TPrefix>
-}
-
-export function bestIdFromSuffix<TPrefix extends string = ''>(
-  suffix: string,
-  prefix?: TPrefix,
-): BestId<TPrefix> {
-  const normalizedPrefix = normalizePrefix(prefix ?? '')
-  validateSuffix(suffix)
-
-  return formatBestId(normalizedPrefix, suffix) as BestId<TPrefix>
+  return generateWith(prefix, uuidv7())
 }
 
 export function parseBestId(value: string): ParsedBestId<string>
@@ -61,6 +126,215 @@ export function parseBestId<TPrefix extends string>(
 export function parseBestId<TPrefix extends string = string>(
   value: string,
   expectedPrefix?: TPrefix,
+): ParsedBestId<TPrefix> {
+  return parseWith(value, expectedPrefix, 'v7')
+}
+
+export function bestIdFromString(value: string): BestId<string>
+export function bestIdFromString<TPrefix extends string>(
+  value: string,
+  expectedPrefix: TPrefix,
+): BestId<TPrefix>
+export function bestIdFromString<TPrefix extends string = string>(
+  value: string,
+  expectedPrefix?: TPrefix,
+): BestId<TPrefix> {
+  return parseWith(value, expectedPrefix, 'v7').value
+}
+
+export function bestIdFromSuffix<TPrefix extends string = ''>(
+  suffix: string,
+  prefix?: TPrefix,
+): BestId<TPrefix> {
+  return fromSuffixWith(suffix, prefix, 'v7')
+}
+
+export function splitBestId<TPrefix extends string>(
+  value: BestId<TPrefix>,
+): BestIdParts<TPrefix>
+export function splitBestId(value: string): BestIdParts<string>
+export function splitBestId<TPrefix extends string>(
+  value: string,
+  expectedPrefix: TPrefix,
+): BestIdParts<TPrefix> & { prefix: TPrefix }
+export function splitBestId<TPrefix extends string = string>(
+  value: string,
+  expectedPrefix?: TPrefix,
+): BestIdParts<TPrefix> {
+  return splitWith(value, expectedPrefix, 'v7')
+}
+
+export function getBestIdPrefix<TPrefix extends string>(
+  value: BestId<TPrefix>,
+): TPrefix {
+  return splitWith(value, undefined, 'v7').prefix as TPrefix
+}
+
+export function getBestIdSuffix<TPrefix extends string>(
+  value: BestId<TPrefix>,
+): string {
+  return splitWith(value, undefined, 'v7').suffix
+}
+
+export function bestIdToUuidBytes<TPrefix extends string>(
+  value: BestId<TPrefix>,
+): Uint8Array {
+  return toUuidBytesWith(value, 'v7')
+}
+
+export function bestIdToUuid<TPrefix extends string>(
+  value: BestId<TPrefix>,
+): string {
+  return stringifyUuid(toUuidBytesWith(value, 'v7'))
+}
+
+export function bestIdFromUuidBytes<TPrefix extends string = ''>(
+  bytes: Uint8Array,
+  prefix?: TPrefix,
+): BestId<TPrefix> {
+  return fromUuidBytesWith(bytes, prefix, 'v7')
+}
+
+export function bestIdFromUuid<TPrefix extends string = ''>(
+  uuid: string,
+  prefix?: TPrefix,
+): BestId<TPrefix> {
+  return fromUuidBytesWith(parseUuid(uuid), prefix, 'v7')
+}
+
+/**
+ * Creates a Best ID instance bound to a single UUID version policy. The string
+ * format is identical across versions, so only generation and validation
+ * differ. Importing this pulls in every operation; import the top-level `v7`
+ * functions instead when a bundle should only carry the ones it uses.
+ */
+export function createBestId(options?: BestIdOptions): BestIdFactory {
+  const version = options?.version ?? 'v7'
+
+  function generate<TPrefix extends string = ''>(
+    prefix?: TPrefix,
+  ): BestId<TPrefix> {
+    return generateWith(prefix, version === 'v4' ? uuidv4() : uuidv7())
+  }
+
+  function parse(value: string): ParsedBestId<string>
+  function parse<TPrefix extends string>(
+    value: string,
+    expectedPrefix: TPrefix,
+  ): ParsedBestId<TPrefix> & { prefix: TPrefix }
+  function parse<TPrefix extends string = string>(
+    value: string,
+    expectedPrefix?: TPrefix,
+  ): ParsedBestId<TPrefix> {
+    return parseWith(value, expectedPrefix, version)
+  }
+
+  function fromString(value: string): BestId<string>
+  function fromString<TPrefix extends string>(
+    value: string,
+    expectedPrefix: TPrefix,
+  ): BestId<TPrefix>
+  function fromString<TPrefix extends string = string>(
+    value: string,
+    expectedPrefix?: TPrefix,
+  ): BestId<TPrefix> {
+    return parseWith(value, expectedPrefix, version).value
+  }
+
+  function fromSuffix<TPrefix extends string = ''>(
+    suffix: string,
+    prefix?: TPrefix,
+  ): BestId<TPrefix> {
+    return fromSuffixWith(suffix, prefix, version)
+  }
+
+  function split<TPrefix extends string>(
+    value: BestId<TPrefix>,
+  ): BestIdParts<TPrefix>
+  function split(value: string): BestIdParts<string>
+  function split<TPrefix extends string>(
+    value: string,
+    expectedPrefix: TPrefix,
+  ): BestIdParts<TPrefix> & { prefix: TPrefix }
+  function split<TPrefix extends string = string>(
+    value: string,
+    expectedPrefix?: TPrefix,
+  ): BestIdParts<TPrefix> {
+    return splitWith(value, expectedPrefix, version)
+  }
+
+  function getPrefix<TPrefix extends string>(value: BestId<TPrefix>): TPrefix {
+    return splitWith(value, undefined, version).prefix as TPrefix
+  }
+
+  function getSuffix<TPrefix extends string>(value: BestId<TPrefix>): string {
+    return splitWith(value, undefined, version).suffix
+  }
+
+  function toUuidBytes<TPrefix extends string>(
+    value: BestId<TPrefix>,
+  ): Uint8Array {
+    return toUuidBytesWith(value, version)
+  }
+
+  function toUuid<TPrefix extends string>(value: BestId<TPrefix>): string {
+    return stringifyUuid(toUuidBytesWith(value, version))
+  }
+
+  function fromUuidBytes<TPrefix extends string = ''>(
+    bytes: Uint8Array,
+    prefix?: TPrefix,
+  ): BestId<TPrefix> {
+    return fromUuidBytesWith(bytes, prefix, version)
+  }
+
+  function fromUuid<TPrefix extends string = ''>(
+    uuid: string,
+    prefix?: TPrefix,
+  ): BestId<TPrefix> {
+    return fromUuidBytesWith(parseUuid(uuid), prefix, version)
+  }
+
+  return {
+    version,
+    generate,
+    parse,
+    fromString,
+    fromSuffix,
+    split,
+    getPrefix,
+    getSuffix,
+    toUuidBytes,
+    toUuid,
+    fromUuidBytes,
+    fromUuid,
+  }
+}
+
+/**
+ * Reads the UUID version encoded in a Best ID suffix, regardless of which
+ * version policy created it. Useful for dispatching on mixed inputs.
+ */
+export function getBestIdVersion(value: string): number {
+  const { suffix } = splitBestIdString(value)
+
+  return decodeBase62(suffix)[6] >> 4
+}
+
+function generateWith<TPrefix extends string = ''>(
+  prefix: TPrefix | undefined,
+  uuid: string,
+): BestId<TPrefix> {
+  const normalizedPrefix = normalizePrefix(prefix ?? '')
+  const suffix = encodeBase62(parseUuid(uuid))
+
+  return formatBestId(normalizedPrefix, suffix) as BestId<TPrefix>
+}
+
+function parseWith<TPrefix extends string = string>(
+  value: string,
+  expectedPrefix: TPrefix | undefined,
+  version: BestIdVersion,
 ): ParsedBestId<TPrefix> {
   const { prefix, suffix } = splitBestIdString(value)
 
@@ -76,7 +350,7 @@ export function parseBestId<TPrefix extends string = string>(
     }
   }
 
-  validateSuffix(suffix)
+  validateSuffix(suffix, version)
 
   return {
     value: value as BestId<TPrefix>,
@@ -85,44 +359,23 @@ export function parseBestId<TPrefix extends string = string>(
   }
 }
 
-export function bestIdFromString(value: string): BestId<string>
-export function bestIdFromString<TPrefix extends string>(
-  value: string,
-  expectedPrefix: TPrefix,
-): BestId<TPrefix>
-export function bestIdFromString<TPrefix extends string = string>(
-  value: string,
-  expectedPrefix?: TPrefix,
+function fromSuffixWith<TPrefix extends string = ''>(
+  suffix: string,
+  prefix: TPrefix | undefined,
+  version: BestIdVersion,
 ): BestId<TPrefix> {
-  if (expectedPrefix === undefined) {
-    return parseBestId(value).value as BestId<TPrefix>
-  }
+  const normalizedPrefix = normalizePrefix(prefix ?? '')
+  validateSuffix(suffix, version)
 
-  return parseBestId(value, expectedPrefix).value
+  return formatBestId(normalizedPrefix, suffix) as BestId<TPrefix>
 }
 
-export function splitBestId<TPrefix extends string>(
-  value: BestId<TPrefix>,
-): BestIdParts<TPrefix>
-export function splitBestId(value: string): BestIdParts<string>
-export function splitBestId<TPrefix extends string>(
+function splitWith<TPrefix extends string = string>(
   value: string,
-  expectedPrefix: TPrefix,
-): BestIdParts<TPrefix> & { prefix: TPrefix }
-export function splitBestId<TPrefix extends string = string>(
-  value: string,
-  expectedPrefix?: TPrefix,
+  expectedPrefix: TPrefix | undefined,
+  version: BestIdVersion,
 ): BestIdParts<TPrefix> {
-  if (expectedPrefix === undefined) {
-    const parsed = parseBestId(value)
-
-    return {
-      prefix: parsed.prefix as TPrefix | '',
-      suffix: parsed.suffix,
-    }
-  }
-
-  const parsed = parseBestId(value, expectedPrefix)
+  const parsed = parseWith(value, expectedPrefix, version)
 
   return {
     prefix: parsed.prefix,
@@ -130,46 +383,23 @@ export function splitBestId<TPrefix extends string = string>(
   }
 }
 
-export function getBestIdPrefix<TPrefix extends string>(
+function toUuidBytesWith<TPrefix extends string>(
   value: BestId<TPrefix>,
-): TPrefix {
-  return splitBestId(value).prefix as TPrefix
-}
-
-export function getBestIdSuffix<TPrefix extends string>(
-  value: BestId<TPrefix>,
-): string {
-  return splitBestId(value).suffix
-}
-
-export function bestIdToUuidBytes<TPrefix extends string>(
-  value: BestId<TPrefix>,
+  version: BestIdVersion,
 ): Uint8Array {
-  return decodeBase62(getBestIdSuffix(value))
+  return decodeBase62(splitWith(value, undefined, version).suffix)
 }
 
-export function bestIdToUuid<TPrefix extends string>(
-  value: BestId<TPrefix>,
-): string {
-  return stringifyUuid(bestIdToUuidBytes(value))
-}
-
-export function bestIdFromUuidBytes<TPrefix extends string = ''>(
+function fromUuidBytesWith<TPrefix extends string = ''>(
   bytes: Uint8Array,
-  prefix?: TPrefix,
+  prefix: TPrefix | undefined,
+  version: BestIdVersion,
 ): BestId<TPrefix> {
   const normalizedPrefix = normalizePrefix(prefix ?? '')
-  assertUuidV7(bytes)
+  assertUuidVersion(bytes, version)
   const suffix = encodeBase62(bytes)
 
   return formatBestId(normalizedPrefix, suffix) as BestId<TPrefix>
-}
-
-export function bestIdFromUuid<TPrefix extends string = ''>(
-  uuid: string,
-  prefix?: TPrefix,
-): BestId<TPrefix> {
-  return bestIdFromUuidBytes(parseUuid(uuid), prefix)
 }
 
 function splitBestIdString(value: string): BestIdParts<string> {
@@ -224,7 +454,7 @@ function validatePrefix(prefix: string): void {
   }
 }
 
-// Fixed-width Base62 preserves the natural byte ordering of UUIDv7 values.
+// Fixed-width Base62 preserves the natural byte ordering of UUID values.
 function encodeBase62(bytes: Uint8Array): string {
   let value = bytesToBigInt(bytes)
 
@@ -271,21 +501,37 @@ function decodeBase62(suffix: string): Uint8Array {
   return bigIntToBytes(value)
 }
 
-function validateSuffix(suffix: string): void {
+function validateSuffix(suffix: string, version: BestIdVersion): void {
   const uuidBytes = decodeBase62(suffix)
-  assertUuidV7(uuidBytes)
+  assertUuidVersion(uuidBytes, version)
 }
 
-function assertUuidV7(bytes: Uint8Array): void {
+function assertUuidVersion(bytes: Uint8Array, version: BestIdVersion): void {
   if (bytes.length !== UUID_BYTE_LENGTH) {
     throw new Error('Best ID suffix must decode to 16 UUID bytes.')
   }
 
-  const version = bytes[6] & 0xf0
-  const variant = bytes[8] & 0xc0
+  const uuidVersion = bytes[6] >> 4
+  const isRfcVariant = (bytes[8] & UUID_VARIANT_MASK) === UUID_VARIANT_RFC
 
-  if (version !== 0x70 || variant !== 0x80) {
-    throw new Error('Best ID suffix does not encode a valid UUIDv7 value.')
+  if (version === 'any') {
+    if (
+      !isRfcVariant ||
+      uuidVersion < UUID_MIN_VERSION ||
+      uuidVersion > UUID_MAX_VERSION
+    ) {
+      throw new Error('Best ID suffix does not encode a valid UUID value.')
+    }
+
+    return
+  }
+
+  const expectedVersion = version === 'v4' ? 4 : 7
+
+  if (!isRfcVariant || uuidVersion !== expectedVersion) {
+    throw new Error(
+      `Best ID suffix does not encode a valid UUID${version} value.`,
+    )
   }
 }
 

@@ -1,13 +1,14 @@
 # best-id
 
-Minimal typed IDs inspired by [typeid-js](https://github.com/jetify-com/typeid-js), backed by UUIDv7 and encoded as fixed-width Base62.
+Minimal typed IDs inspired by [typeid-js](https://github.com/jetify-com/typeid-js), backed by UUID and encoded as fixed-width Base62.
 
 ## Features
 
 - Optional lowercase prefix, like `user_0T7AqK1dY4ZxN8mJ2pLsQ9`
 - Prefix-free canonical form, like `0T7AqK1dY4ZxN8mJ2pLsQ9`
 - Fixed 22-character Base62 suffix
-- UUIDv7 under the hood, so values remain time-sortable
+- UUIDv7 under the hood by default, so values remain time-sortable
+- Optional UUIDv4 mode via `createBestId({ version: 'v4' })` when sortability is not wanted
 - Branded TypeScript types for safer prefix-aware APIs
 
 ## Install
@@ -64,6 +65,59 @@ const sameUserId = bestIdFromSuffix('0T7AqK1dY4ZxN8mJ2pLsQ9', 'user')
 // => 'user_0T7AqK1dY4ZxN8mJ2pLsQ9'
 ```
 
+## Version modes
+
+Every Best ID is a 128-bit UUID rendered as 22 Base62 characters, so the string
+format is identical across versions. Only generation and validation differ, and
+the UUID version is self-describing inside the payload — no migration or format
+change is needed to mix modes.
+
+| Mode           | Generates | Accepts                          | Time-sortable      |
+| -------------- | --------- | -------------------------------- | ------------------ |
+| `v7` (default) | UUIDv7    | UUIDv7 only                      | Yes                |
+| `v4`           | UUIDv4    | UUIDv4 only                      | No                 |
+| `any`          | UUIDv7    | any RFC 9562 UUID (versions 1-8) | Only for v7 values |
+
+`createBestId` returns an instance bound to one mode. The top-level exports are
+the `v7` instance, so existing code keeps its behaviour unchanged.
+
+```ts
+import { createBestId, getBestIdVersion } from 'best-id'
+
+const randomId = createBestId({ version: 'v4' })
+
+const userId = randomId.generate('user')
+//    ^? BestId<'user'>
+// => 'user_5Kx0mQ8bTfR2vLpA7nWzJd'
+
+randomId.parse(userId, 'user')
+randomId.toUuid(userId)
+// => 'b1f4c0d2-...-4...' (a UUIDv4)
+
+getBestIdVersion(userId)
+// => 4
+```
+
+All modes share the same prefix rules, the 22-character Base62 suffix and the
+128-bit range check. Only the UUID version check differs, so a `v4` instance
+rejects v7 payloads and vice versa:
+
+```ts
+randomId.parse(generateBestId('user'), 'user')
+// Error: Best ID suffix does not encode a valid UUIDv4 value.
+```
+
+Use `any` to read mixed or legacy data, then dispatch on `getBestIdVersion`:
+
+```ts
+const mixedId = createBestId({ version: 'any' })
+
+mixedId.parse(someExistingValue)
+```
+
+Note that `any` still requires a valid RFC variant and a version between 1 and
+8, so the nil UUID and arbitrary 128-bit blobs are rejected.
+
 ## API
 
 The API naming follows the existing `best-id` style instead of mirroring `typeid-js` verbatim:
@@ -74,6 +128,8 @@ The API naming follows the existing `best-id` style instead of mirroring `typeid
 - `getBestIdPrefix` / `getBestIdSuffix` instead of `getType` / `getSuffix`
 - `bestIdToUuid` / `bestIdToUuidBytes`
 - `bestIdFromUuid` / `bestIdFromUuidBytes`
+- `createBestId` for an instance bound to a UUID version mode
+- `getBestIdVersion` to read the UUID version of any Best ID
 
 ### `generateBestId`
 
@@ -103,7 +159,7 @@ Parses and validates a Best ID string. The suffix must be:
 
 - exactly 22 characters long
 - valid Base62 using `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz`
-- a valid UUIDv7 payload after decoding
+- a valid UUID payload for the instance's version mode after decoding
 
 ### `bestIdFromSuffix`
 
@@ -166,7 +222,7 @@ function bestIdToUuidBytes<TPrefix extends string>(
 ): Uint8Array
 ```
 
-Decodes a branded Best ID into its UUIDv7 bytes.
+Decodes a branded Best ID into its UUID bytes.
 
 ### `bestIdToUuid`
 
@@ -185,7 +241,7 @@ function bestIdFromUuidBytes<TPrefix extends string = ''>(
 ): BestId<TPrefix>
 ```
 
-Builds a Best ID from UUIDv7 bytes. Non-v7 bytes are rejected.
+Builds a Best ID from UUID bytes. Bytes that do not match the instance's version mode are rejected.
 
 ### `bestIdFromUuid`
 
@@ -196,7 +252,27 @@ function bestIdFromUuid<TPrefix extends string = ''>(
 ): BestId<TPrefix>
 ```
 
-Builds a Best ID from a UUIDv7 string. Non-v7 UUIDs are rejected.
+Builds a Best ID from a UUID string. UUIDs that do not match the instance's version mode are rejected.
+
+### `createBestId`
+
+```ts
+function createBestId(options?: BestIdOptions): BestIdFactory
+```
+
+Creates a Best ID instance bound to a single version mode. The returned object
+exposes the same operations without the `bestId` naming prefix: `generate`,
+`parse`, `fromString`, `fromSuffix`, `split`, `getPrefix`, `getSuffix`,
+`toUuid`, `toUuidBytes`, `fromUuid`, `fromUuidBytes`, plus a readonly `version`.
+
+### `getBestIdVersion`
+
+```ts
+function getBestIdVersion(value: string): number
+```
+
+Returns the UUID version encoded in a Best ID suffix, without enforcing any
+version policy. Malformed suffixes still throw.
 
 ## Format
 
