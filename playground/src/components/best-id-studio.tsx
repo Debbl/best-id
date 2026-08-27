@@ -29,16 +29,21 @@ import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
 import { Separator } from '~/components/ui/separator'
 import { Textarea } from '~/components/ui/textarea'
-import { bestIdToUuid, parseBestId } from '~/lib/best-id'
+import { VersionSelector } from '~/components/version-selector'
+import { getBestIdVersion } from '~/lib/best-id'
 import {
   clampCount,
   createBatch,
   createInitialParseText,
   DEFAULT_COUNT,
   DEFAULT_PREFIX,
+  DEFAULT_VERSION,
+  getBestIdInstance,
+  getVersionOption,
   MAX_COUNT,
 } from '~/lib/best-id-studio-data'
 import { cn } from '~/lib/utils'
+import type { BestIdVersion } from '~/lib/best-id'
 import type { GeneratedItem } from '~/lib/best-id-studio-data'
 
 interface ParsedSuccess {
@@ -48,6 +53,7 @@ interface ParsedSuccess {
   status: 'valid'
   suffix: string
   uuid: string
+  uuidVersion: number
 }
 
 interface ParsedFailure {
@@ -61,8 +67,13 @@ type ParsedEntry = ParsedFailure | ParsedSuccess
 
 const INSTALL_COMMAND = 'pnpm add best-id'
 
-function parseEntries(input: string, expectedPrefix: string): ParsedEntry[] {
+function parseEntries(
+  input: string,
+  expectedPrefix: string,
+  version: BestIdVersion,
+): ParsedEntry[] {
   const normalizedExpectedPrefix = expectedPrefix.trim()
+  const instance = getBestIdInstance(version)
 
   return input
     .split(/\r?\n/)
@@ -72,8 +83,8 @@ function parseEntries(input: string, expectedPrefix: string): ParsedEntry[] {
       try {
         const parsed =
           normalizedExpectedPrefix === ''
-            ? parseBestId(value)
-            : parseBestId(value, normalizedExpectedPrefix)
+            ? instance.parse(value)
+            : instance.parse(value, normalizedExpectedPrefix)
 
         return {
           input: value,
@@ -81,7 +92,8 @@ function parseEntries(input: string, expectedPrefix: string): ParsedEntry[] {
           prefix: parsed.prefix,
           status: 'valid',
           suffix: parsed.suffix,
-          uuid: bestIdToUuid(parsed.value),
+          uuid: instance.toUuid(parsed.value),
+          uuidVersion: getBestIdVersion(value),
         } satisfies ParsedSuccess
       } catch (error) {
         return {
@@ -103,7 +115,11 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
   const initialParseText = createInitialParseText(initialGeneratedItems)
   const [prefix, setPrefix] = useState(DEFAULT_PREFIX)
   const [count, setCount] = useState(DEFAULT_COUNT)
+  const [generatorVersion, setGeneratorVersion] =
+    useState<BestIdVersion>(DEFAULT_VERSION)
   const [expectedPrefix, setExpectedPrefix] = useState(DEFAULT_PREFIX)
+  const [parserVersion, setParserVersion] =
+    useState<BestIdVersion>(DEFAULT_VERSION)
   const [generatedItems, setGeneratedItems] = useState<GeneratedItem[]>(
     initialGeneratedItems,
   )
@@ -121,7 +137,7 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
     }
   }, [])
 
-  const parsedEntries = parseEntries(parserInput, expectedPrefix)
+  const parsedEntries = parseEntries(parserInput, expectedPrefix, parserVersion)
   const validEntries = parsedEntries.filter((entry) => entry.status === 'valid')
   const invalidEntries = parsedEntries.length - validEntries.length
 
@@ -144,10 +160,13 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
 
   function handleGenerate() {
     try {
-      const nextItems = createBatch(prefix, count)
+      const nextItems = createBatch(prefix, count, generatorVersion)
 
       setGeneratedItems(nextItems)
       setParserInput(nextItems.map((item) => item.id).join('\n'))
+      // Keep the parser able to read what was just generated; switching it back
+      // by hand is what shows the cross-mode rejection.
+      setParserVersion(generatorVersion)
       setGeneratorError(null)
     } catch (error) {
       setGeneratorError(
@@ -159,12 +178,15 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
   function handleInspect(item: GeneratedItem) {
     setExpectedPrefix(item.prefix)
     setParserInput(item.id)
+    setParserVersion(generatorVersion)
   }
 
   function handleReset() {
     setPrefix(DEFAULT_PREFIX)
     setCount(DEFAULT_COUNT)
+    setGeneratorVersion(DEFAULT_VERSION)
     setExpectedPrefix(DEFAULT_PREFIX)
+    setParserVersion(DEFAULT_VERSION)
     setGeneratedItems(initialGeneratedItems)
     setParserInput(initialParseText)
     setGeneratorError(null)
@@ -192,7 +214,7 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
                 variant='secondary'
               >
                 <Fingerprint className='size-3.5' />
-                UUIDv7 + Base62
+                UUIDv7 / UUIDv4 + Base62
               </Badge>
             </div>
 
@@ -264,6 +286,7 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
                 <Badge variant='secondary'>Prefix aware</Badge>
                 <Badge variant='outline'>22-char suffix</Badge>
                 <Badge variant='outline'>Batch generation</Badge>
+                <Badge variant='outline'>v7 / v4 modes</Badge>
               </div>
               <CardTitle className='text-2xl sm:text-3xl'>
                 A live surface for the parts that matter.
@@ -272,7 +295,8 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
                 Leave the prefix empty for suffix-only IDs, or use a lowercase
                 namespace like <code>user</code> and <code>order</code>. Every
                 generated item below is immediately parseable into prefix,
-                suffix, and canonical UUID.
+                suffix, and canonical UUID. Switch the version mode to swap the
+                UUID payload without changing the string format.
               </CardDescription>
             </CardHeader>
             <CardContent className='grid gap-4 sm:grid-cols-3'>
@@ -290,7 +314,7 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
                 {
                   icon: Braces,
                   label: 'Underlying payload',
-                  value: 'validated UUIDv7',
+                  value: `validated ${getVersionOption(generatorVersion).generateHint}`,
                 },
               ].map(({ icon: Icon, label, value }) => (
                 <div
@@ -315,10 +339,10 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
             </CardHeader>
             <CardContent className='space-y-4 text-sm'>
               {[
-                'Pick a prefix and a count.',
+                'Pick a version mode, a prefix and a count.',
                 'Generate a batch and copy any ID or UUID.',
                 'Send one ID or the whole batch to the parser.',
-                'Validate arbitrary lines with or without an expected prefix.',
+                'Flip the parser to another mode to watch validation reject it.',
               ].map((step, index) => (
                 <div
                   key={step}
@@ -374,6 +398,14 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
               </CardHeader>
 
               <CardContent className='space-y-6'>
+                <VersionSelector
+                  hintKind='generate'
+                  id='generator-version'
+                  label='Version mode'
+                  onChange={setGeneratorVersion}
+                  value={generatorVersion}
+                />
+
                 <div className='grid gap-4 md:grid-cols-[1fr_148px_auto]'>
                   <div className='space-y-2'>
                     <Label htmlFor='generator-prefix'>Prefix</Label>
@@ -428,6 +460,7 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
                   <Badge variant='outline'>
                     {generatedItems.length} fresh IDs
                   </Badge>
+                  <Badge variant='secondary'>Mode: {generatorVersion}</Badge>
                   <span>
                     Allowed prefix characters: lowercase letters and
                     underscores.
@@ -457,6 +490,9 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
                             <Badge variant='secondary'>#{index + 1}</Badge>
                             <Badge variant='outline'>
                               {item.prefix === '' ? 'prefix-free' : item.prefix}
+                            </Badge>
+                            <Badge variant='outline'>
+                              UUIDv{item.uuidVersion}
                             </Badge>
                           </div>
 
@@ -556,11 +592,14 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
                     <CardDescription>
                       Paste one Best ID per line. Add an expected prefix if you
                       want mismatch errors, then inspect the prefix, suffix, and
-                      UUID string for every valid line.
+                      UUID string for every valid line. The accepted version is
+                      independent of the generator, so a v4 batch read under the
+                      v7 policy is rejected.
                     </CardDescription>
                   </div>
 
                   <div className='flex flex-wrap gap-2'>
+                    <Badge variant='secondary'>Accepts: {parserVersion}</Badge>
                     <Badge variant='outline'>{validEntries.length} valid</Badge>
                     <Badge
                       variant={invalidEntries > 0 ? 'destructive' : 'outline'}
@@ -573,6 +612,14 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
 
               <CardContent className='space-y-6'>
                 <div className='grid gap-4'>
+                  <VersionSelector
+                    hintKind='accept'
+                    id='parser-version'
+                    label='Accepted version'
+                    onChange={setParserVersion}
+                    value={parserVersion}
+                  />
+
                   <div className='space-y-2'>
                     <Label htmlFor='expected-prefix'>Expected prefix</Label>
                     <Input
@@ -630,11 +677,16 @@ export function BestIdStudio({ initialGeneratedItems }: BestIdStudioProps) {
                               {entry.status === 'valid' ? 'Valid' : 'Invalid'}
                             </Badge>
                             {entry.status === 'valid' && (
-                              <Badge variant='outline'>
-                                {entry.prefix === ''
-                                  ? 'prefix-free'
-                                  : entry.prefix}
-                              </Badge>
+                              <>
+                                <Badge variant='outline'>
+                                  {entry.prefix === ''
+                                    ? 'prefix-free'
+                                    : entry.prefix}
+                                </Badge>
+                                <Badge variant='outline'>
+                                  UUIDv{entry.uuidVersion}
+                                </Badge>
+                              </>
                             )}
                           </div>
 
